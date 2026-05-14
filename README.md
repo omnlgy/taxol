@@ -17,8 +17,6 @@ The project requires a couple tools to run, most of which are part of many devel
 - Tilt
 - A local Kubernetes cluster
 
-### MacOS
-
 1. Install Docker for Desktop from [Docker's official website](https://www.docker.com/products/docker-desktop/)
 
 2. Install Minikube from [Minikube's official website](https://minikube.sigs.k8s.io/docs/)
