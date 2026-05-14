@@ -1,0 +1,11 @@
+info:
+  name: rider ws
+  type: websocket
+  seq: 4
+
+websocket:
+  url: ws://localhost:8081/ws/riders?userID=01f9a27b-2030-4d53-a966-82b3b2020b1f
+  message:
+    type: json
+    data: "{}"
+  auth: inherit

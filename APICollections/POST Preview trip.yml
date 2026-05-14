@@ -1,0 +1,29 @@
+info:
+  name: POST Preview trip
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: http://localhost:8081/trip/preview
+  body:
+    type: json
+    data: |-
+      {
+        "userId" : "asdd",
+        "pickup" : {
+          "latitude": -6.1998823012123445,
+          "longitude" : 106.86692026591578
+        },
+        "destination": {
+          "latitude": -6.201698119431996,
+          "longitude": 106.87294096462875
+        }
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

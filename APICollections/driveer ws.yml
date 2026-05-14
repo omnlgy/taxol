@@ -1,0 +1,11 @@
+info:
+  name: driveer ws
+  type: websocket
+  seq: 3
+
+websocket:
+  url: ws://localhost:8081/ws/drivers?userID=19a6d994-6a17-4922-b96f-676e73304e6a&packageSlug=sedan
+  message:
+    type: json
+    data: "{}"
+  auth: inherit
