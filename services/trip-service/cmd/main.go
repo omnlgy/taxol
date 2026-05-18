@@ -3,15 +3,22 @@ package main
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
-	h "ride-sharing/services/trip-service/internal/infrastructure/http"
+	httpInfra "ride-sharing/services/trip-service/internal/infrastructure/http"
 	"ride-sharing/services/trip-service/internal/infrastructure/repository"
 	"ride-sharing/services/trip-service/internal/service"
 	"syscall"
 	"time"
+
+	grcpInfra "ride-sharing/services/trip-service/internal/infrastructure/grpc"
+
+	"google.golang.org/grpc"
 )
+
+const grpcAddr = ":9093"
 
 func main() {
 
@@ -19,7 +26,7 @@ func main() {
 	svc := service.NewService(inmemRepo)
 	mux := http.NewServeMux()
 
-	httpHandler := h.HttpHandler{
+	httpHandler := httpInfra.HttpHandler{
 		Service: svc,
 	}
 
@@ -30,33 +37,63 @@ func main() {
 		Handler: mux,
 	}
 
-	serverError := make(chan error, 1)
+	grpcServer := grpc.NewServer()
+
+	tcpListener, err := net.Listen("tcp", grpcAddr)
+	if err != nil {
+		fmt.Printf("Failed to listen: %v\n", err)
+		return
+	}
+
+	defer tcpListener.Close()
+
+	grcpInfra.NewGrpcHandler(grpcServer, svc)
+
+	serverError := make(chan error, 2)
 
 	go func() {
-		fmt.Printf("Server started on %s\n", server.Addr)
+		fmt.Println("Server started on", server.Addr)
+
 		serverError <- server.ListenAndServe()
 	}()
 
-	shutdown := make(chan os.Signal, 1)
+	go func() {
+		fmt.Println("gRPC server started on", grpcAddr)
 
-	signal.Notify(shutdown, os.Interrupt, syscall.SIGTERM)
+		serverError <- grpcServer.Serve(tcpListener)
+	}()
+
+	ctxSignal, stopSignal := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stopSignal()
 
 	select {
 	case err := <-serverError:
 		fmt.Printf("Error starting server: %v\n", err)
-	case <-shutdown:
-		fmt.Println("Server shutting down")
 
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-
-		if err := server.Shutdown(ctx); err != nil {
-			fmt.Printf("Could not shut down server gracefully: %v\n", err)
-			server.Close()
-		}
+	case <-ctxSignal.Done():
+		fmt.Println("Received shutdown signal")
 	}
 
-	// if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-	// 	log.Fatalf("server failed to start: %v", err)
-	// }
+	grpcDone := make(chan struct{})
+	go func() {
+		grpcServer.GracefulStop()
+		close(grpcDone)
+	}()
+
+	select {
+	case <-grpcDone:
+		fmt.Println("gRPC server stopped")
+	case <-time.After(5 * time.Second):
+		fmt.Println("gRPC server did not stop in time, forcing exit")
+		grpcServer.Stop()
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := server.Shutdown(ctx); err != nil {
+		fmt.Printf("Could not shut down server gracefully: %v\n", err)
+		server.Close()
+	}
+
 }

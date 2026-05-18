@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -18,39 +17,47 @@ func handleTripPreview(w http.ResponseWriter, r *http.Request) {
 
 	defer r.Body.Close()
 
-	if reqBody.UserId == "" {
+	if reqBody.UserID == "" {
 		http.Error(w, "user id is required", http.StatusBadRequest)
 		return
 	}
 
-	jsonBody, err := json.Marshal(reqBody)
-	if err != nil {
-		http.Error(w, "failed to marshal request body", http.StatusInternalServerError)
-		return
-	}
+	// jsonBody, err := json.Marshal(reqBody)
+	// if err != nil {
+	// 	http.Error(w, "failed to marshal request body", http.StatusInternalServerError)
+	// 	return
+	// }
 
-	reader := bytes.NewReader(jsonBody)
+	// reader := bytes.NewReader(jsonBody)
 
 	tripService, err := grpc_clients.NewTripServiceClient()
 	if err != nil {
 		http.Error(w, "failed to create trip service client", http.StatusInternalServerError)
 		return
 	}
+
 	defer tripService.Close()
 
-	res, err := http.Post("http://trip-service:8083/preview", "application/json", reader)
+	tripPreview, err := tripService.Client.PreviewTrip(r.Context(), reqBody.ToProto())
 	if err != nil {
-		http.Error(w, "failed to send request to trip service", http.StatusInternalServerError)
-		return
-	}
-	defer res.Body.Close()
-	var responseBody any
-	if err := json.NewDecoder(res.Body).Decode(&responseBody); err != nil {
-		http.Error(w, "failed to decode response body", http.StatusInternalServerError)
+		fmt.Println("Error:", err)
+		http.Error(w, "failed to preview trip", http.StatusInternalServerError)
 		return
 	}
 
-	responses := contracts.APIResponse{Data: responseBody}
+	// res, err := http.Post("http://trip-service:8083/preview", "application/json", reader)
+	// if err != nil {
+	// 	http.Error(w, "failed to send request to trip service", http.StatusInternalServerError)
+	// 	return
+	// }
+	// defer res.Body.Close()
+	// var responseBody any
+	// if err := json.NewDecoder(res.Body).Decode(&responseBody); err != nil {
+	// 	http.Error(w, "failed to decode response body", http.StatusInternalServerError)
+	// 	return
+	// }
+
+	responses := contracts.APIResponse{Data: tripPreview}
 	fmt.Println("test from handTrip Preview")
 	writeJSON(w, http.StatusOK, responses)
 }
