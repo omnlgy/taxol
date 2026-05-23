@@ -56,3 +56,75 @@ func (s *service) GetRoute(ctx context.Context, pickup, destination *types.Coord
 
 	return &routeRes, nil
 }
+
+func (s *service) EstimatePackagesPriceWithRoute(route *tripTypes.OsrmApiResponse) []*domain.RideFareModel {
+	baseFare := getBaseFare()
+	estimatedFare := make([]*domain.RideFareModel, len(baseFare))
+
+	for i, fare := range estimatedFare {
+		estimatedFare[i] = estimatedFareRoute(fare, route)
+	}
+
+	return estimatedFare
+}
+
+func (s *service) GenerateTripFares(ctx context.Context, rideFares []*domain.RideFareModel, userID string) ([]*domain.RideFareModel, error) {
+	fares := make([]*domain.RideFareModel, len(rideFares))
+
+	for i, rideFare := range rideFares {
+		id := primitive.NewObjectID()
+
+		fare := &domain.RideFareModel{
+			ID:                id,
+			UserID:            userID,
+			TotalPriceInCents: rideFare.TotalPriceInCents,
+			PackageSlug:       rideFare.PackageSlug,
+		}
+
+		if err := s.repo.SaveRiderFare(ctx, fare); err != nil {
+			return nil, fmt.Errorf("Failed to save trip fare : %w", err)
+		}
+
+		fares[i] = fare
+	}
+
+	return fares, nil
+}
+
+func estimatedFareRoute(rideFare *domain.RideFareModel, route *tripTypes.OsrmApiResponse) *domain.RideFareModel {
+	priceConfig := tripTypes.DefaultPriceConfig()
+	carPackagePrice := rideFare.TotalPriceInCents
+
+	distance := route.Routes[0].Distance
+	duration := route.Routes[0].Duration
+
+	distanceFare := distance * priceConfig.PricePerUnitOfDistance
+	timeFare := duration * priceConfig.PriceingPerMinute
+	totalFare := carPackagePrice + distanceFare + timeFare
+
+	return &domain.RideFareModel{
+		TotalPriceInCents: totalFare,
+		PackageSlug:       rideFare.PackageSlug,
+	}
+}
+
+func getBaseFare() []*domain.RideFareModel {
+	return []*domain.RideFareModel{
+		{
+			PackageSlug:       "suv",
+			TotalPriceInCents: 200,
+		},
+		{
+			PackageSlug:       "sedan",
+			TotalPriceInCents: 350,
+		},
+		{
+			PackageSlug:       "van",
+			TotalPriceInCents: 400,
+		},
+		{
+			PackageSlug:       "luxury",
+			TotalPriceInCents: 1000,
+		},
+	}
+}
